@@ -11,11 +11,16 @@ import java.awt.event.MouseListener;
 import java.awt.Font;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Vector;
+import java.util.List;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.web.client.ResourceAccessException;
 
 public class ToDoPanel extends JPanel implements ActionListener{
 
@@ -30,6 +35,8 @@ public class ToDoPanel extends JPanel implements ActionListener{
 	private DefaultListModel<JCheckboxWithObject> tasksListModel = new DefaultListModel<JCheckboxWithObject>();
 	private JCheckBoxList listTask = new JCheckBoxList();
 	private JScrollPane tasksScroller = new JScrollPane(listTask);
+	private TodoClient client = new TodoClient();
+	private List<Todo> todos = new ArrayList<Todo>();
 	
 	public ToDoPanel() {
         listTask.setModel(tasksListModel);
@@ -84,7 +91,31 @@ public class ToDoPanel extends JPanel implements ActionListener{
 		add(tasksScroller);
 		add(removeButton);
 	    tasksScroller.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+	    try{
+	    refreshTodoList();
+	    }
+	    catch(ResourceAccessException e){
+	    	EventQueue.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					new ErrorFrame();
+				}
+	    	});
+	    }
 		this.updateUI();
+	}
+
+	private void refreshTodoList() {
+		tasksListModel.clear();
+		todos = client.getForTodos();
+	    for (Todo todo : todos){
+		    JCheckBox checkBox = new JCheckBox();
+			JCheckboxWithObject checkBoxWithObject = new JCheckboxWithObject(checkBox, todo);
+			checkBoxWithObject.setText(todo.getText());
+			checkBox.setSelected(todo.getDone());
+			tasksListModel.addElement(checkBoxWithObject);
+			listTask.getStartingDone(todos);
+	    }
 	}
 
 	@Override
@@ -92,26 +123,17 @@ public class ToDoPanel extends JPanel implements ActionListener{
 	}
 
 	private void removeButtonAction() {
-		JCheckBox cB;
-		for (int index = 0; index< listTask.getModel().getSize(); index++){
-	    	cB = (JCheckBox) listTask.getModel().getElementAt(index);
-	    	if (cB.isSelected()){
-	    		tasksListModel.remove(index);
-	    		index--;
-	    	}
-	    }
+		client.deleteDoneTodo();
+		refreshTodoList();
 		this.updateUI();
 	}
 
 	private void addButtonAction() {
 		if(!textPane.getText().isEmpty()){
-			JCheckBox checkBox = new JCheckBox();
-			JCheckboxWithObject checkBoxWithObject = new JCheckboxWithObject(checkBox);
-			checkBoxWithObject.setText(textPane.getText());
-			tasksListModel.addElement(checkBoxWithObject);
+			client.postForTodo(textPane.getText(), false);
+			refreshTodoList();
 			tasksScroller.repaint();	
 			textPane.setText(null);
-			checkBoxVector.add(checkBox);
 			this.updateUI();
 		}
 	}
